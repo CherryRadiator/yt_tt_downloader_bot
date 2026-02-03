@@ -31,17 +31,19 @@ public class YtDlpDownloader {
         log.info("Starting download: {}", url);
         Process process = pb.start();
 
+        StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                log.debug("yt-dlp: {}", line);
+                log.info("yt-dlp: {}", line);
+                output.append(line).append("\n");
             }
         }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             deleteDirectory(tempDir);
-            throw new IOException("yt-dlp exited with code " + exitCode);
+            throw new IOException("yt-dlp exited with code " + exitCode + "\n" + output);
         }
 
         File[] files = tempDir.toFile().listFiles();
