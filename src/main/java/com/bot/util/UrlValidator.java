@@ -5,11 +5,11 @@ import java.util.regex.Pattern;
 public class UrlValidator {
 
     private static final Pattern YOUTUBE_PATTERN = Pattern.compile(
-            "https?://(www\\.)?(youtube\\.com/watch\\?v=|youtu\\.be/|youtube\\.com/shorts/)[\\w-]+"
+            "https?://(www\\.)?(youtube\\.com/(watch|shorts)|youtu\\.be/)[\\w?=&/.-]+"
     );
 
     private static final Pattern TIKTOK_PATTERN = Pattern.compile(
-            "https?://(www\\.|vm\\.)?(tiktok\\.com/)[\\w@./]+"
+            "https?://(www\\.|vm\\.)?(tiktok\\.com/)[\\w@./?=&-]+"
     );
 
     public static boolean isYouTubeUrl(String url) {

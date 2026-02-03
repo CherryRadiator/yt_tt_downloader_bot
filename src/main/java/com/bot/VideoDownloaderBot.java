@@ -50,11 +50,13 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
             return;
         }
 
+        log.info("Received message: {}", text);
         String url = UrlValidator.extractUrl(text);
         if (url == null) {
             sendText(chatId, "Please send a valid YouTube or TikTok link.");
             return;
         }
+        log.info("Extracted URL: {}", url);
 
         sendText(chatId, "Downloading your video...");
 
