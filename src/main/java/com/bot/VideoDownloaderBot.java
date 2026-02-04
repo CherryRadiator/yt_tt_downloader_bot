@@ -17,6 +17,7 @@ import java.io.File;
 public class VideoDownloaderBot extends TelegramLongPollingBot {
 
     private static final Logger log = LoggerFactory.getLogger(VideoDownloaderBot.class);
+    private static final long MAX_FILE_SIZE_MB = 2000;
 
     private final String botUsername;
     private final YtDlpDownloader downloader = new YtDlpDownloader();
@@ -66,7 +67,12 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
             sendVideo(chatId, videoFile);
         } catch (Exception e) {
             log.error("Failed to download video: {}", url, e);
-            sendText(chatId, "Failed to download the video. Please check the link and try again.");
+            if (e.getMessage() != null && e.getMessage().contains("too large")) {
+                long sizeMb = videoFile != null ? videoFile.length() / (1024 * 1024) : 0;
+                sendText(chatId, "The video is too large (" + sizeMb + " MB). Telegram limit is 2000 MB.");
+            } else {
+                sendText(chatId, "Failed to download the video. Please check the link and try again.");
+            }
         } finally {
             downloader.cleanup(videoFile);
         }
@@ -86,6 +92,11 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
     private void sendVideo(String chatId, File file) throws TelegramApiException {
         long sizeMb = file.length() / (1024 * 1024);
         log.info("Sending video: {} ({} MB)", file.getName(), sizeMb);
+
+        if (sizeMb >= MAX_FILE_SIZE_MB) {
+            log.warn("Video too large to send: {} ({} MB, limit {} MB)", file.getName(), sizeMb, MAX_FILE_SIZE_MB);
+            throw new TelegramApiException("Video is too large (" + sizeMb + " MB). Telegram limit is " + MAX_FILE_SIZE_MB + " MB.");
+        }
 
         try {
             execute(SendVideo.builder()
