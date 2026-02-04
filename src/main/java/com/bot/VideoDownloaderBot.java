@@ -84,9 +84,28 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
     }
 
     private void sendVideo(String chatId, File file) throws TelegramApiException {
-        execute(SendVideo.builder()
-                .chatId(chatId)
-                .video(new InputFile(file))
-                .build());
+        long sizeMb = file.length() / (1024 * 1024);
+        log.info("Sending video: {} ({} MB)", file.getName(), sizeMb);
+
+        try {
+            execute(SendVideo.builder()
+                    .chatId(chatId)
+                    .video(new InputFile(file))
+                    .build());
+            log.info("Video sent successfully: {} ({} MB)", file.getName(), sizeMb);
+        } catch (TelegramApiException e) {
+            log.warn("First sendVideo attempt failed, retrying in 3s...", e);
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw e;
+            }
+            execute(SendVideo.builder()
+                    .chatId(chatId)
+                    .video(new InputFile(file))
+                    .build());
+            log.info("Video sent successfully on retry: {} ({} MB)", file.getName(), sizeMb);
+        }
     }
 }

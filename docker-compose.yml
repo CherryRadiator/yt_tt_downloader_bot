@@ -4,10 +4,12 @@ services:
     environment:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "true"
     ports:
       - "8081:8081"
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
+      - shared-data:/tmp/shared
 
   bot:
     build: .
@@ -17,7 +19,10 @@ services:
       BOT_TOKEN: ${BOT_TOKEN}
       BOT_USERNAME: ${BOT_USERNAME}
       TELEGRAM_API_BASE_URL: http://telegram-bot-api:8081/bot
+    volumes:
+      - shared-data:/tmp/shared
     restart: unless-stopped
 
 volumes:
   telegram-bot-api-data:
+  shared-data:

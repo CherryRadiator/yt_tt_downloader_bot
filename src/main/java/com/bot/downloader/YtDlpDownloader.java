@@ -14,8 +14,11 @@ public class YtDlpDownloader {
 
     private static final Logger log = LoggerFactory.getLogger(YtDlpDownloader.class);
 
+    private static final Path SHARED_DIR = Path.of("/tmp/shared");
+
     public File download(String url) throws IOException, InterruptedException {
-        Path tempDir = Files.createTempDirectory("yt-dlp-");
+        Files.createDirectories(SHARED_DIR);
+        Path tempDir = Files.createTempDirectory(SHARED_DIR, "yt-dlp-");
         String outputTemplate = tempDir.resolve("%(title).80s.%(ext)s").toString();
 
         ProcessBuilder pb = new ProcessBuilder(
