@@ -9,7 +9,7 @@ public class UrlValidator {
     );
 
     private static final Pattern TIKTOK_PATTERN = Pattern.compile(
-            "https?://(www\\.|vm\\.)?(tiktok\\.com/)[\\w@./?=&-]+"
+            "https?://(www\\.|vm\\.|vt\\.)?(tiktok\\.com/)[\\w@./?=&-]+"
     );
 
     public static boolean isYouTubeUrl(String url) {
