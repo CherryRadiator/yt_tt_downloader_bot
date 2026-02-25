@@ -12,6 +12,14 @@ public class UrlValidator {
             "https?://(www\\.|vm\\.|vt\\.)?(tiktok\\.com/)[\\w@./?=&-]+"
     );
 
+    private static final Pattern PINTEREST_PATTERN = Pattern.compile(
+            "https?://(www\\.|[a-z]{2}\\.)?pinterest\\.(com|co\\.uk|ca|de|fr|it|es|jp|ru|com\\.au|at|ch|cl|com\\.mx|co\\.kr|nz|ie|pt|ph|se|dk|com\\.br)/pin/[\\w/?=&-]+"
+    );
+
+    private static final Pattern PINTEREST_SHORT_PATTERN = Pattern.compile(
+            "https?://pin\\.it/[\\w-]+"
+    );
+
     public static boolean isYouTubeUrl(String url) {
         return YOUTUBE_PATTERN.matcher(url).find();
     }
@@ -20,8 +28,12 @@ public class UrlValidator {
         return TIKTOK_PATTERN.matcher(url).find();
     }
 
+    public static boolean isPinterestUrl(String url) {
+        return PINTEREST_PATTERN.matcher(url).find() || PINTEREST_SHORT_PATTERN.matcher(url).find();
+    }
+
     public static boolean isSupportedUrl(String url) {
-        return isYouTubeUrl(url) || isTikTokUrl(url);
+        return isYouTubeUrl(url) || isTikTokUrl(url) || isPinterestUrl(url);
     }
 
     public static String extractUrl(String text) {

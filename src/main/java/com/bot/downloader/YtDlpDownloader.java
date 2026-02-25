@@ -21,7 +21,7 @@ public class YtDlpDownloader {
     private static final Logger log = LoggerFactory.getLogger(YtDlpDownloader.class);
 
     private static final Path SHARED_DIR = Path.of("/tmp/shared");
-    private static final String DEFAULT_FORMAT = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
+    private static final String DEFAULT_FORMAT = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best";
 
     public record FormatInfo(int height, long estimatedSizeMb) {}
 
@@ -174,6 +174,7 @@ public class YtDlpDownloader {
 
     public static String buildFormatSelector(int height) {
         return "bestvideo[height<=" + height + "][ext=mp4]+bestaudio[ext=m4a]"
+                + "/bestvideo[height<=" + height + "]+bestaudio"
                 + "/best[height<=" + height + "][ext=mp4]"
                 + "/best[height<=" + height + "]";
     }

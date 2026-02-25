@@ -63,18 +63,19 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
 
         if (text.equals("/start")) {
             sendText(chatId, """
-                    Welcome! Send me a YouTube or TikTok link and I'll download the video for you.
+                    Welcome! Send me a YouTube, TikTok, or Pinterest link and I'll download the video for you.
 
                     Supported links:
                     - YouTube (youtube.com, youtu.be, shorts)
-                    - TikTok (tiktok.com, vm.tiktok.com)""");
+                    - TikTok (tiktok.com, vm.tiktok.com)
+                    - Pinterest (pinterest.com/pin/..., pin.it)""");
             return;
         }
 
         log.info("Received message: {}", text);
         String url = UrlValidator.extractUrl(text);
         if (url == null) {
-            sendText(chatId, "Please send a valid YouTube or TikTok link.");
+            sendText(chatId, "Please send a valid YouTube, TikTok, or Pinterest link.");
             return;
         }
         log.info("Extracted URL: {}", url);
