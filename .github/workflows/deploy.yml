@@ -21,4 +21,5 @@ jobs:
             git pull origin main
             docker compose down -v --remove-orphans 2>/dev/null || true
             docker ps -a --format '{{.Names}}' | grep telegram_download_yt_tt_bot | xargs -r docker rm -f 2>/dev/null || true
-            docker compose up --build --force-recreate -d
+            docker compose build --no-cache bot
+            docker compose up --force-recreate -d
