@@ -21,7 +21,13 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 public class VideoDownloaderBot extends TelegramLongPollingBot {
@@ -35,6 +41,18 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
 
     private record PendingDownload(String url, int messageId, long createdAt) {}
     private final ConcurrentHashMap<String, PendingDownload> pendingDownloads = new ConcurrentHashMap<>();
+
+    private record DownloadTask(String url, String formatSelector, int statusMessageId) {}
+
+    private static class UserSession {
+        final Queue<DownloadTask> queue = new ConcurrentLinkedQueue<>();
+        final AtomicReference<Process> activeProcess = new AtomicReference<>();
+        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        volatile boolean processing = false;
+    }
+
+    private final ConcurrentHashMap<String, UserSession> userSessions = new ConcurrentHashMap<>();
+    private final ExecutorService downloadExecutor = Executors.newCachedThreadPool();
 
     public VideoDownloaderBot(DefaultBotOptions options, String botToken, String botUsername) {
         super(options, botToken);
@@ -85,8 +103,7 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
         List<FormatInfo> allFormats = downloader.fetchAvailableFormats(url);
 
         if (allFormats.size() <= 1) {
-            editMessage(chatId, probeMsgId, "Downloading your video...");
-            downloadAndSend(chatId, probeMsgId, url, null);
+            submitDownload(chatId, new DownloadTask(url, null, probeMsgId));
             return;
         }
 
@@ -105,8 +122,7 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
         }
 
         if (downloadable.size() == 1 && tooLarge.isEmpty()) {
-            editMessage(chatId, probeMsgId, "Downloading your video...");
-            downloadAndSend(chatId, probeMsgId, url, null);
+            submitDownload(chatId, new DownloadTask(url, null, probeMsgId));
             return;
         }
 
@@ -131,6 +147,11 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
         String data = callback.getData();
 
         answerCallback(callbackId);
+
+        if ("dl:cancel".equals(data)) {
+            handleCancelCallback(chatId);
+            return;
+        }
 
         PendingDownload pending = pendingDownloads.get(chatId);
         if (pending == null || System.currentTimeMillis() - pending.createdAt() > PENDING_EXPIRY_MS) {
@@ -160,14 +181,101 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
         }
 
         pendingDownloads.remove(chatId);
-        editMessage(chatId, pending.messageId(), "Downloading in " + qualityLabel + "...");
-        downloadAndSend(chatId, pending.messageId(), pending.url(), formatSelector);
+        submitDownload(chatId, new DownloadTask(pending.url(), formatSelector, pending.messageId()));
     }
 
-    private void downloadAndSend(String chatId, int statusMessageId, String url, String formatSelector) {
+    private void handleCancelCallback(String chatId) {
+        UserSession session = userSessions.get(chatId);
+        if (session == null) {
+            return;
+        }
+
+        session.cancelled.set(true);
+
+        Process process = session.activeProcess.get();
+        if (process != null) {
+            process.destroyForcibly();
+        }
+
+        // Cancel all queued tasks
+        DownloadTask queued;
+        while ((queued = session.queue.poll()) != null) {
+            editMessage(chatId, queued.statusMessageId(), "Download cancelled.");
+        }
+    }
+
+    private void submitDownload(String chatId, DownloadTask task) {
+        UserSession session = userSessions.computeIfAbsent(chatId, k -> new UserSession());
+
+        synchronized (session) {
+            session.queue.add(task);
+
+            int queueSize = session.queue.size();
+            if (session.processing) {
+                // Already processing — show queued status
+                int ahead = queueSize - 1;
+                String text = "Queued (" + ahead + " ahead)...";
+                InlineKeyboardMarkup cancelKeyboard = buildCancelKeyboard(queueSize + 1);
+                editMessageWithKeyboard(chatId, task.statusMessageId(), text, cancelKeyboard);
+                return;
+            }
+
+            session.processing = true;
+            session.cancelled.set(false);
+        }
+
+        downloadExecutor.submit(() -> processQueue(chatId, session));
+    }
+
+    private void processQueue(String chatId, UserSession session) {
+        try {
+            while (true) {
+                DownloadTask task;
+                synchronized (session) {
+                    if (session.cancelled.get()) {
+                        // Cancel any tasks that were added after the cancel signal
+                        DownloadTask remaining;
+                        while ((remaining = session.queue.poll()) != null) {
+                            editMessage(chatId, remaining.statusMessageId(), "Download cancelled.");
+                        }
+                        return;
+                    }
+                    task = session.queue.poll();
+                    if (task == null) {
+                        return;
+                    }
+                }
+
+                int totalTasks = session.queue.size() + 1;
+                String statusText = "Downloading...";
+                if (session.queue.size() > 0) {
+                    statusText += " (" + session.queue.size() + " more in queue)";
+                }
+                InlineKeyboardMarkup cancelKeyboard = buildCancelKeyboard(totalTasks);
+                editMessageWithKeyboard(chatId, task.statusMessageId(), statusText, cancelKeyboard);
+
+                downloadAndSend(chatId, task.statusMessageId(), task.url(), task.formatSelector(), session);
+            }
+        } finally {
+            synchronized (session) {
+                session.processing = false;
+            }
+            session.activeProcess.set(null);
+            session.cancelled.set(false);
+        }
+    }
+
+    private void downloadAndSend(String chatId, int statusMessageId, String url,
+                                  String formatSelector, UserSession session) {
         File videoFile = null;
         try {
-            videoFile = downloader.download(url, formatSelector);
+            videoFile = downloader.download(url, formatSelector, session.activeProcess);
+
+            if (session.cancelled.get()) {
+                editMessage(chatId, statusMessageId, "Download cancelled.");
+                return;
+            }
+
             long sizeMb = videoFile.length() / (1024 * 1024);
 
             if (sizeMb >= MAX_FILE_SIZE_MB) {
@@ -179,11 +287,27 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
             sendVideo(chatId, videoFile);
             editMessage(chatId, statusMessageId, "Video sent (" + sizeMb + " MB).");
         } catch (Exception e) {
-            log.error("Failed to download video: {}", url, e);
-            editMessage(chatId, statusMessageId, "Failed to download the video. Please check the link and try again.");
+            if (session.cancelled.get()) {
+                editMessage(chatId, statusMessageId, "Download cancelled.");
+            } else {
+                log.error("Failed to download video: {}", url, e);
+                editMessage(chatId, statusMessageId, "Failed to download the video. Please check the link and try again.");
+            }
         } finally {
+            session.activeProcess.set(null);
             downloader.cleanup(videoFile);
         }
+    }
+
+    private InlineKeyboardMarkup buildCancelKeyboard(int totalTasks) {
+        String label = totalTasks > 1 ? "Cancel all (" + totalTasks + ")" : "Cancel download";
+        InlineKeyboardButton cancelButton = InlineKeyboardButton.builder()
+                .text(label)
+                .callbackData("dl:cancel")
+                .build();
+        return InlineKeyboardMarkup.builder()
+                .keyboard(List.of(List.of(cancelButton)))
+                .build();
     }
 
     private InlineKeyboardMarkup buildQualityKeyboard(List<FormatInfo> formats) {

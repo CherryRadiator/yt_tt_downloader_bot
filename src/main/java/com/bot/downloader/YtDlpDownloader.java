@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class YtDlpDownloader {
 
@@ -127,6 +128,11 @@ public class YtDlpDownloader {
     }
 
     public File download(String url, String formatSelector) throws IOException, InterruptedException {
+        return download(url, formatSelector, new AtomicReference<>());
+    }
+
+    public File download(String url, String formatSelector, AtomicReference<Process> processRef)
+            throws IOException, InterruptedException {
         Files.createDirectories(SHARED_DIR);
         Path tempDir = Files.createTempDirectory(SHARED_DIR, "yt-dlp-");
         String outputTemplate = tempDir.resolve("%(title).80s.%(ext)s").toString();
@@ -146,6 +152,7 @@ public class YtDlpDownloader {
 
         log.info("Starting download: {} with format: {}", url, format);
         Process process = pb.start();
+        processRef.set(process);
 
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
