@@ -24,6 +24,7 @@ jobs:
             # Clone on first deploy, otherwise pull
             if [ ! -d "$REPO_DIR/.git" ]; then
               git clone https://github.com/CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
+              FRESH_CLONE=true
             fi
 
             cd "$REPO_DIR"
@@ -33,7 +34,7 @@ jobs:
             LOCAL=$(git rev-parse HEAD)
             REMOTE=$(git rev-parse origin/main)
 
-            if [ "$LOCAL" = "$REMOTE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            if ["$FRESH_CLONE" = false] && [ "$LOCAL" = "$REMOTE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
               echo "Already up to date, skipping redeploy."
               exit 0
             fi
