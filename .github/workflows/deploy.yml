@@ -14,8 +14,8 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }
-          key: ${{ secrets.VPS_SSH_KEY }}}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
             
@@ -44,3 +44,35 @@ jobs:
             docker compose up --build --force-recreate -d --remove-orphans bot
             
             docker image prune -f
+#          script: |
+#            set -euo pipefail
+#
+#            REPO_DIR="$HOME/telegram_download_yt_tt_bot"
+#
+#            FRESH_CLONE=false
+#            # Clone on first deploy, otherwise pull
+#            if [ ! -d "$REPO_DIR/.git" ]; then
+#              git clone https://github.com/CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
+#              FRESH_CLONE=true
+#            fi
+#
+#            cd "$REPO_DIR"
+#
+#            # Only redeploy if there are actual changes
+#            git fetch origin main
+#            LOCAL=$(git rev-parse HEAD)
+#            REMOTE=$(git rev-parse origin/main)
+#
+#            if ["$FRESH_CLONE" = false] && [ "$LOCAL" = "$REMOTE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+#              echo "Already up to date, skipping redeploy."
+#              exit 0
+#            fi
+#
+#            git reset --hard origin/main
+#
+#            # Rebuild and restart only the bot service
+#            docker compose pull --quiet 2>/dev/null || true
+#            docker compose up --build --force-recreate -d --remove-orphans bot
+#
+#            # Prune unused images to save disk space
+#            docker image prune -f
