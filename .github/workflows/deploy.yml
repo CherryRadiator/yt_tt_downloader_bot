@@ -18,61 +18,38 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-            
+
             REPO_DIR="$HOME/telegram_download_yt_tt_bot"
-            
+
             FRESH_CLONE=false
             if [ ! -d "$REPO_DIR/.git" ]; then
-              git clone https://github.com/YOUR_USER/telegram_download_yt_tt_bot.git "$REPO_DIR"
+              git clone https://github.com/CherryRadiator/telegram_download_yt_tt_bot.git "$REPO_DIR"
               FRESH_CLONE=true
             fi
-            
+
             cd "$REPO_DIR"
-            
+
+            # Write .env from GitHub secrets
+            cat > .env << 'EOF'
+            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+            BOT_USERNAME=${{ secrets.BOT_USERNAME }}
+            TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+            TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            YT_COOKIES_BASE64=${{ secrets.YT_COOKIES_BASE64 }}
+            EOF
+
             git fetch origin main
-            
+
             LOCAL=$(git rev-parse HEAD)
             REMOTE=$(git rev-parse origin/main)
-            
+
             if [ "$FRESH_CLONE" = false ] && [ "$LOCAL" = "$REMOTE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
               echo "Already up to date, skipping redeploy."
               exit 0
             fi
-            
+
             git reset --hard origin/main
-            
+
             docker compose up --build --force-recreate -d --remove-orphans bot
-            
+
             docker image prune -f
-#          script: |
-#            set -euo pipefail
-#
-#            REPO_DIR="$HOME/telegram_download_yt_tt_bot"
-#
-#            FRESH_CLONE=false
-#            # Clone on first deploy, otherwise pull
-#            if [ ! -d "$REPO_DIR/.git" ]; then
-#              git clone https://github.com/CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
-#              FRESH_CLONE=true
-#            fi
-#
-#            cd "$REPO_DIR"
-#
-#            # Only redeploy if there are actual changes
-#            git fetch origin main
-#            LOCAL=$(git rev-parse HEAD)
-#            REMOTE=$(git rev-parse origin/main)
-#
-#            if ["$FRESH_CLONE" = false] && [ "$LOCAL" = "$REMOTE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-#              echo "Already up to date, skipping redeploy."
-#              exit 0
-#            fi
-#
-#            git reset --hard origin/main
-#
-#            # Rebuild and restart only the bot service
-#            docker compose pull --quiet 2>/dev/null || true
-#            docker compose up --build --force-recreate -d --remove-orphans bot
-#
-#            # Prune unused images to save disk space
-#            docker image prune -f
