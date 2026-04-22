@@ -20,7 +20,8 @@ jobs:
             set -euo pipefail
 
             REPO_DIR="$HOME/telegram_download_yt_tt_bot"
-
+            
+            FRESH_CLONE=false
             # Clone on first deploy, otherwise pull
             if [ ! -d "$REPO_DIR/.git" ]; then
               git clone https://github.com/CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
