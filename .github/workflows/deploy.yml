@@ -16,7 +16,6 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
           script: |
             set -euo pipefail
 
@@ -24,7 +23,7 @@ jobs:
 
             # Clone on first deploy, otherwise pull
             if [ ! -d "$REPO_DIR/.git" ]; then
-              git clone git@github.com:CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
+              git clone https://github.com/CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
             fi
 
             cd "$REPO_DIR"
