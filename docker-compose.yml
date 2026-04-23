@@ -22,7 +22,7 @@ services:
       YT_COOKIES_PATH: /opt/bot/yt-cookies.txt
     volumes:
       - shared-data:/tmp/shared
-      - /opt/bot/yt-cookies.txt:/opt/bot/yt-cookies.txt:ro
+      - /opt/bot/yt-cookies.txt:/opt/bot/yt-cookies.txt
     restart: unless-stopped
 
 volumes:
