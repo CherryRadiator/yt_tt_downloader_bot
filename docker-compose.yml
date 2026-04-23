@@ -19,8 +19,10 @@ services:
       BOT_TOKEN: ${BOT_TOKEN}
       BOT_USERNAME: ${BOT_USERNAME}
       TELEGRAM_API_BASE_URL: http://telegram-bot-api:8081/bot
+      YT_COOKIES_PATH: /opt/bot/yt-cookies.txt
     volumes:
       - shared-data:/tmp/shared
+      - /opt/bot/yt-cookies.txt:/opt/bot/yt-cookies.txt:ro
     restart: unless-stopped
 
 volumes:
