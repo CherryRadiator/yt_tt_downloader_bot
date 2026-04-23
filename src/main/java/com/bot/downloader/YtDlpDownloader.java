@@ -24,18 +24,39 @@ public class YtDlpDownloader {
     private static final Path SHARED_DIR = Path.of("/tmp/shared");
     private static final String DEFAULT_FORMAT = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best";
 
+    // Path where GitHub Actions writes the decoded cookies file on the VPS.
+    // Override by setting the YT_COOKIES_PATH environment variable.
+    private static final String COOKIES_PATH = System.getenv().getOrDefault(
+            "YT_COOKIES_PATH", "/opt/bot/yt-cookies.txt"
+    );
+
     public record FormatInfo(int height, long estimatedSizeMb) {}
+
+    /** Appends --cookies <path> to the command if the cookies file exists. */
+    private void addCookiesIfPresent(List<String> command) {
+        File cookiesFile = new File(COOKIES_PATH);
+        if (cookiesFile.exists() && cookiesFile.isFile()) {
+            command.add("--cookies");
+            command.add(COOKIES_PATH);
+            log.debug("Using cookies file: {}", COOKIES_PATH);
+        } else {
+            log.debug("No cookies file found at {}, proceeding without authentication", COOKIES_PATH);
+        }
+    }
 
     public List<FormatInfo> fetchAvailableFormats(String url) {
         try {
-            ProcessBuilder pb = new ProcessBuilder(
+            List<String> cmd = new ArrayList<>(List.of(
                     "yt-dlp",
                     "--dump-json",
                     "--no-playlist",
                     "--no-download",
-                    "--remote-components", "ejs:github",
-                    url
-            );
+                    "--remote-components", "ejs:github"
+            ));
+            addCookiesIfPresent(cmd);
+            cmd.add(url);
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(false);
 
             log.info("Probing formats for: {}", url);
@@ -123,6 +144,7 @@ public class YtDlpDownloader {
         return fmt.optLong("filesize_approx", 0);
     }
 
+    @SuppressWarnings("unused") // public API convenience overload
     public File download(String url) throws IOException, InterruptedException {
         return download(url, null);
     }
@@ -139,15 +161,17 @@ public class YtDlpDownloader {
 
         String format = formatSelector != null ? formatSelector : DEFAULT_FORMAT;
 
-        ProcessBuilder pb = new ProcessBuilder(
+        List<String> cmd = new ArrayList<>(List.of(
                 "yt-dlp",
                 "-f", format,
                 "--merge-output-format", "mp4",
                 "--remote-components", "ejs:github",
-                "--no-playlist",
-                "-o", outputTemplate,
-                url
-        );
+                "--no-playlist"
+        ));
+        addCookiesIfPresent(cmd);
+        cmd.addAll(List.of("-o", outputTemplate, url));
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
 
         log.info("Starting download: {} with format: {}", url, format);
@@ -190,7 +214,7 @@ public class YtDlpDownloader {
         if (file == null) return;
         try {
             Path dir = file.getParentFile().toPath();
-            file.delete();
+            Files.deleteIfExists(file.toPath());
             Files.deleteIfExists(dir);
         } catch (IOException e) {
             log.warn("Failed to clean up temp files", e);
@@ -202,7 +226,11 @@ public class YtDlpDownloader {
             File[] files = dir.toFile().listFiles();
             if (files != null) {
                 for (File f : files) {
-                    f.delete();
+                    try {
+                        Files.deleteIfExists(f.toPath());
+                    } catch (IOException e) {
+                        log.warn("Failed to delete file: {}", f, e);
+                    }
                 }
             }
             Files.deleteIfExists(dir);

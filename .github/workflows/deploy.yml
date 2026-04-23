@@ -1,15 +1,24 @@
 name: Deploy to VPS
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Write cookies to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p /opt/bot
+            echo "${{ secrets.YT_COOKIES_BASE64 }}" | base64 -d > /opt/bot/yt-cookies.txt
+            chmod 600 /opt/bot/yt-cookies.txt
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -18,38 +27,28 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-
             REPO_DIR="$HOME/telegram_download_yt_tt_bot"
-
             FRESH_CLONE=false
             if [ ! -d "$REPO_DIR/.git" ]; then
               git clone https://github.com/CherryRadiator/telegram_download_yt_tt_bot.git "$REPO_DIR"
               FRESH_CLONE=true
             fi
-
             cd "$REPO_DIR"
-
             # Write .env from GitHub secrets
             cat > .env << 'EOF'
             BOT_TOKEN=${{ secrets.BOT_TOKEN }}
             BOT_USERNAME=${{ secrets.BOT_USERNAME }}
             TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
             TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
-            YT_COOKIES_BASE64=${{ secrets.YT_COOKIES_BASE64 }}
+            YT_COOKIES_PATH=/opt/bot/yt-cookies.txt
             EOF
-
             git fetch origin main
-
             LOCAL=$(git rev-parse HEAD)
             REMOTE=$(git rev-parse origin/main)
-
             if [ "$FRESH_CLONE" = false ] && [ "$LOCAL" = "$REMOTE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
               echo "Already up to date, skipping redeploy."
               exit 0
             fi
-
             git reset --hard origin/main
-
             docker compose up --build --force-recreate -d --remove-orphans bot
-
             docker image prune -f
