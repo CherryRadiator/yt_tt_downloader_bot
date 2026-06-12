@@ -27,7 +27,7 @@ jobs:
             REPO_DIR="$HOME/telegram_download_yt_tt_bot"
             FRESH_CLONE=false
             if [ ! -d "$REPO_DIR/.git" ]; then
-              git clone git@github.com:CherryRadiator/telegram_download_yt_tt_bot.git "$REPO_DIR"
+              git clone git@github.com:CherryRadiator/yt_tt_downloader_bot.git "$REPO_DIR"
               FRESH_CLONE=true
             fi
             cd "$REPO_DIR"
