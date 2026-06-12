@@ -12,7 +12,9 @@ services:
       - shared-data:/tmp/shared
 
   bot:
-    build: .
+    build:
+      context: .
+      network: host
     depends_on:
       - telegram-bot-api
     environment:
