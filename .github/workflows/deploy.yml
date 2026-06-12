@@ -8,17 +8,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Write cookies to VPS
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            mkdir -p /opt/bot
-            echo "${{ secrets.YT_COOKIES_BASE64 }}" | base64 -d > /opt/bot/yt-cookies.txt
-            chmod 600 /opt/bot/yt-cookies.txt
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -42,6 +31,13 @@ jobs:
               FRESH_CLONE=true
             fi
             cd "$REPO_DIR"
+
+            # Ensure cookies file exists as a file (not directory) before mounting
+            touch yt-cookies.txt
+            if [ -n "${{ secrets.YT_COOKIES_BASE64 }}" ]; then
+              echo "${{ secrets.YT_COOKIES_BASE64 }}" | base64 -d > yt-cookies.txt
+              chmod 600 yt-cookies.txt
+            fi
 
             # Write .env from GitHub secrets
             cat > .env << 'EOF'
