@@ -30,13 +30,10 @@ jobs:
 
             # Set up GitHub deploy key
             mkdir -p ~/.ssh
-            echo "${{ secrets.GH_DEPLOY_KEY }}" > ~/.ssh/github_deploy_key
+            printf '%s\n' '${{ secrets.GH_DEPLOY_KEY }}' > ~/.ssh/github_deploy_key
             chmod 600 ~/.ssh/github_deploy_key
-            grep -qF "github_deploy_key" ~/.ssh/config 2>/dev/null || cat >> ~/.ssh/config << 'SSHEOF'
-            Host github.com
-              IdentityFile ~/.ssh/github_deploy_key
-              StrictHostKeyChecking no
-            SSHEOF
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+            export GIT_SSH_COMMAND="ssh -i ~/.ssh/github_deploy_key -o StrictHostKeyChecking=no"
 
             REPO_DIR="$HOME/telegram_download_yt_tt_bot"
             FRESH_CLONE=false
