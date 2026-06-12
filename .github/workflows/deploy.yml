@@ -27,13 +27,25 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
+
+            # Set up GitHub deploy key
+            mkdir -p ~/.ssh
+            echo "${{ secrets.GH_DEPLOY_KEY }}" > ~/.ssh/github_deploy_key
+            chmod 600 ~/.ssh/github_deploy_key
+            grep -qF "github_deploy_key" ~/.ssh/config 2>/dev/null || cat >> ~/.ssh/config << 'SSHEOF'
+            Host github.com
+              IdentityFile ~/.ssh/github_deploy_key
+              StrictHostKeyChecking no
+            SSHEOF
+
             REPO_DIR="$HOME/telegram_download_yt_tt_bot"
             FRESH_CLONE=false
             if [ ! -d "$REPO_DIR/.git" ]; then
-              git clone https://github.com/CherryRadiator/telegram_download_yt_tt_bot.git "$REPO_DIR"
+              git clone git@github.com:CherryRadiator/telegram_download_yt_tt_bot.git "$REPO_DIR"
               FRESH_CLONE=true
             fi
             cd "$REPO_DIR"
+
             # Write .env from GitHub secrets
             cat > .env << 'EOF'
             BOT_TOKEN=${{ secrets.BOT_TOKEN }}
@@ -42,6 +54,7 @@ jobs:
             TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
             YT_COOKIES_PATH=/opt/bot/yt-cookies.txt
             EOF
+
             git fetch origin main
             LOCAL=$(git rev-parse HEAD)
             REMOTE=$(git rev-parse origin/main)
