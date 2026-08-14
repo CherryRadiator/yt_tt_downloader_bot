@@ -24,9 +24,9 @@ public class YtDlpDownloader {
     private static final Path SHARED_DIR = Path.of("/tmp/shared");
     private static final String DEFAULT_FORMAT = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best";
 
-    // Path where GitHub Actions writes the decoded cookies file on the VPS.
+    // Path where GitHub Actions or Telegram admin upload writes the cookies file.
     // Override by setting the YT_COOKIES_PATH environment variable.
-    private static final String COOKIES_PATH = System.getenv().getOrDefault(
+    public static final String COOKIES_PATH = System.getenv().getOrDefault(
             "YT_COOKIES_PATH", "/opt/bot/yt-cookies.txt"
     );
 

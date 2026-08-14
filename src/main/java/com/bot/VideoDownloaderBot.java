@@ -19,9 +19,18 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -29,6 +38,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.objects.Document;
 
 public class VideoDownloaderBot extends TelegramLongPollingBot {
 
@@ -37,6 +48,7 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
     private static final long PENDING_EXPIRY_MS = 30 * 60 * 1000;
 
     private final String botUsername;
+    private final Set<Long> adminIds;
     private final YtDlpDownloader downloader = new YtDlpDownloader();
 
     private record PendingDownload(String url, int messageId, long createdAt) {}
@@ -57,6 +69,31 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
     public VideoDownloaderBot(DefaultBotOptions options, String botToken, String botUsername) {
         super(options, botToken);
         this.botUsername = botUsername;
+        this.adminIds = parseAdminIds(System.getenv("ADMIN_IDS"));
+        log.info("Initialized VideoDownloaderBot with {} admin(s)", adminIds.size());
+    }
+
+    private static Set<Long> parseAdminIds(String env) {
+        if (env == null || env.isBlank()) {
+            return Collections.emptySet();
+        }
+        return Arrays.stream(env.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> {
+                    try {
+                        return Long.parseLong(s);
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid admin ID in ADMIN_IDS: {}", s);
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private boolean isAdmin(long userId) {
+        return adminIds.contains(userId);
     }
 
     @Override
@@ -70,13 +107,83 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
             handleCallbackQuery(update.getCallbackQuery());
             return;
         }
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            handleTextMessage(update);
+        if (update.hasMessage()) {
+            if (update.getMessage().hasDocument()) {
+                handleDocumentMessage(update);
+                return;
+            }
+            if (update.getMessage().hasText()) {
+                handleTextMessage(update);
+            }
+        }
+    }
+
+    private void handleDocumentMessage(Update update) {
+        var message = update.getMessage();
+        String chatId = message.getChatId().toString();
+        long userId = message.getFrom() != null ? message.getFrom().getId() : 0;
+
+        if (!isAdmin(userId)) {
+            log.warn("Unauthorized document upload attempt from user ID: {}", userId);
+            sendText(chatId, "⚠️ You are not authorized to update cookies. Your Telegram ID: " + userId);
+            return;
+        }
+
+        Document document = message.getDocument();
+        String fileName = document.getFileName();
+        if (fileName == null) {
+            fileName = "cookies.txt";
+        }
+
+        if (!fileName.toLowerCase().endsWith(".txt")) {
+            sendText(chatId, "❌ Please send a .txt file containing the exported cookies (e.g. yt-cookies.txt).");
+            return;
+        }
+
+        try {
+            sendText(chatId, "⏳ Downloading and applying cookies file...");
+            GetFile getFile = new GetFile(document.getFileId());
+            org.telegram.telegrambots.meta.api.objects.File tgFile = execute(getFile);
+
+            byte[] content;
+            String filePath = tgFile.getFilePath();
+            File localSourceFile = filePath != null ? new File(filePath) : null;
+
+            if (localSourceFile != null && localSourceFile.exists() && localSourceFile.isFile()) {
+                log.info("Reading uploaded file directly from local API storage: {}", filePath);
+                content = Files.readAllBytes(localSourceFile.toPath());
+            } else {
+                log.info("Downloading uploaded file via API stream: {}", filePath);
+                try (InputStream in = downloadFileAsStream(tgFile)) {
+                    content = in.readAllBytes();
+                }
+            }
+
+            if (content.length == 0) {
+                sendText(chatId, "❌ The uploaded file is empty.");
+                return;
+            }
+
+            Path cookiesPath = Path.of(YtDlpDownloader.COOKIES_PATH);
+            if (cookiesPath.getParent() != null) {
+                Files.createDirectories(cookiesPath.getParent());
+            }
+
+            Files.write(cookiesPath, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            log.info("Cookies updated by admin {}: {} bytes written to {}", userId, content.length, cookiesPath);
+
+            String status = String.format("✅ Cookies updated successfully!\n\n📁 File: %s\n📊 Size: %.2f KB\n📍 Path: %s",
+                    fileName, content.length / 1024.0, cookiesPath);
+            sendText(chatId, status);
+        } catch (Exception e) {
+            log.error("Failed to update cookies file from admin {}", userId, e);
+            sendText(chatId, "❌ Failed to update cookies: " + e.getMessage());
         }
     }
 
     private void handleTextMessage(Update update) {
         String chatId = update.getMessage().getChatId().toString();
+        long userId = update.getMessage().getFrom() != null ? update.getMessage().getFrom().getId() : 0;
         String text = update.getMessage().getText().trim();
 
         if (text.equals("/start")) {
@@ -87,6 +194,32 @@ public class VideoDownloaderBot extends TelegramLongPollingBot {
                     - YouTube (youtube.com, youtu.be, shorts)
                     - TikTok (tiktok.com, vm.tiktok.com)
                     - Pinterest (pinterest.com/pin/..., pin.it)""");
+            return;
+        }
+
+        if (text.equals("/myid")) {
+            sendText(chatId, "Your Telegram User ID: " + userId + (isAdmin(userId) ? " (Admin)" : ""));
+            return;
+        }
+
+        if (text.equals("/cookies") || text.equals("/status")) {
+            File file = new File(YtDlpDownloader.COOKIES_PATH);
+            StringBuilder sb = new StringBuilder();
+            sb.append("📊 Cookies Status:\n");
+            if (file.exists() && file.isFile()) {
+                sb.append("✅ Cookies file is present\n");
+                sb.append("📁 Path: ").append(file.getAbsolutePath()).append("\n");
+                sb.append("📏 Size: ").append(String.format("%.2f KB", file.length() / 1024.0)).append("\n");
+                sb.append("🕒 Modified: ").append(new Date(file.lastModified())).append("\n");
+            } else {
+                sb.append("⚠️ No cookies file found at ").append(YtDlpDownloader.COOKIES_PATH).append("\n");
+            }
+            if (isAdmin(userId)) {
+                sb.append("\n👑 You are an admin. Send a .txt cookie file to update it.");
+            } else {
+                sb.append("\nYour User ID: ").append(userId);
+            }
+            sendText(chatId, sb.toString());
             return;
         }
 

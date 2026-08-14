@@ -10,6 +10,7 @@ services:
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
       - shared-data:/tmp/shared
+    restart: unless-stopped
 
   bot:
     build:
@@ -22,7 +23,9 @@ services:
       BOT_USERNAME: ${BOT_USERNAME}
       TELEGRAM_API_BASE_URL: http://telegram-bot-api:8081/bot
       YT_COOKIES_PATH: /opt/bot/yt-cookies.txt
+      ADMIN_IDS: ${ADMIN_IDS:-}
     volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
       - shared-data:/tmp/shared
       - ./yt-cookies.txt:/opt/bot/yt-cookies.txt
     restart: unless-stopped
