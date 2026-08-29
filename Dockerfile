@@ -11,7 +11,7 @@ FROM eclipse-temurin:17-jre-jammy
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 python3-pip ffmpeg curl unzip && \
     pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir "yt-dlp[default]" && \
+    pip3 install --no-cache-dir "yt-dlp[default]" curl_cffi && \
     curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
